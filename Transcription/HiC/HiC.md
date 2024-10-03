@@ -4,7 +4,7 @@
 
 First, we run the python script in the Jupiter Notebook, <kbd>Cluster Hi-C Script Generator.ipynb</kbd>. This notebook generates shell scripts for each step of High Throughput Chromatin Conformation Capture that happens on Northwestern's Quest HPC Cluster. These scripts are placed in the local directory that you have specified and can then be moved to the cluster directory where you'll perform the analysis. After the initial function in the script, the remaining functions in <kbd>Cluster Hi-C Script Generator.ipynb</kbd> will be included at the end of this markdown
 
-#### Step 1a: Build directory structure first:
+### Step 1a: Build directory structure first:
 
 ```shell
 cd /projects/b1042/BackmanLab/HiC2/
@@ -19,7 +19,7 @@ mkdir /projects/b1042/BackmanLab/HiC2/opt/juicer/chrom_sizes/
 
 ```
 
-#### Step 1b: Create Directory Tree
+### Step 1b: Create Directory Tree
 First, it creates a directory structure using the following function and variables:
 
 ```python
@@ -80,7 +80,7 @@ def create_dir_struct(output_path,experiment_name,conds,reps_per_cond):
 ```
 
 
-#### Step 2a: Prepare indices and cut site file
+### Step 2a: Prepare indices and cut site file
 
 ##### **Get genome reference and build indices:**
 
@@ -299,7 +299,7 @@ chr13	114364328
 chr14	107043718 ...
 ```
 
-# Part 2b: Downloading and installing Juicer
+### Part 2b: Downloading and installing Juicer
 
 Following that, you'll want to download the CPU collection of Juicer scripts. There are some issues running the SLURM collection of scripts on Quest (I later used the SLURM version, but had to make extensive edits to the script so that it would work efficiently with NU's HPC). As of 110122, the readme in the the latest release (Juicer 2.0) says to use the Juicer 1.6 release found [here](https://github.com/aidenlab/juicer/releases/tag/1.6) since 2.0 is still under development. Do not use v.2.0
 
@@ -334,7 +334,7 @@ chmod +x juicer.sh
 ```
 That's it! Juicer is installed.
 
-#### Step 3: Generate .HiC Files
+### Step 3: Generate .HiC Files
 Second, we generate shell scripts for each replicate that we want to analyze using <kbd>Cluster Hi-C Script Generator.ipynb</kbd>. These scripts load _BWA_ for alignment, set the working directory to wherever the FASTQ files are stored for that replicate, call flag <kbd>-D</kbd> _(directory where Juicer software is installed)_, flag <kbd>-g</kbd> _(genome)_, flag <kbd>-y</kbd> (restriction site file with all predicted cuts based on your genome), and call flag <kbd>-p</kbd> ( a file containing the sizes of each chromosome for your genome). More on usage can be found [here](https://github.com/aidenlab/juicer/wiki/Usage). <kbd>Cleanup.sh</kbd> cleans up big repetitive files and zip fastqs. Run after you are sure the pipeline ran successfully. Output is listed [here](https://github.com/aidenlab/juicer/wiki/Running-Juicer-on-a-cluster) but the most important output are the nter.hic / inter_30.hic files( The .hic files for Hi-C contacts at MAPQ > 0 and at MAPQ >= 30, respectively).
 
 ```shell
@@ -356,7 +356,7 @@ cd /projects/b1042/BackmanLab/HiC/opt/juicer/work/experiment/samplename/rep/fast
 gunzip aligned/merged_nodups.txt.gz
 ```
 
-#### Step 4: Merge Replicates
+### Step 4: Merge Replicates
 If not analyzing replicates as individuals, we can create statistics and a hic file from a series of replicates using the <kbd>mega.sh</kbd> script. Usage is almost identical to <kbd>Juicer.sh</kbd>. More usage can be found in the [source code](https://github.com/aidenlab/juicer/blob/main/CPU/mega.sh). Set the working directory directly above your replicates (where juicer.sh was run) and make sure that there is a 'mega' directory here for <kbd>mega.sh</kbd> to deposit merged replicates.
 
 ```shell
@@ -387,11 +387,11 @@ cd /projects/b1042/BackmanLab/juicer/work/112123_HiC/juicer_analysis/WT_HCT116_C
 **Note:**
 There are several additional analysis steps to gather contact probability statistics and do contact probability analysis, if wanted. They're not included here because those steps are written in R in a separate script. For those scripts, please see <kbd>Readme.md</kbd>.
 
-#### Step 5: Compartments, TADS, and loops
+### Step 5: Compartments, TADS, and loops
 
 At this point, we have .hic contact files for our individual replicates and merged .hic contact files that we can use for downstream analyses. From here, we can generate eigens for compartments, call loops with HICCUPs, and find TADs with arrowhead (or an equivalent TAD caller).
 
-#### Compartments
+### Compartments
 Below is a sample script for submitting scripts for all conditions and replicates to find compartments, using Juicer's [eigen](https://github.com/aidenlab/juicer/wiki/Eigenvector) and [pearson](https://github.com/aidenlab/juicer/wiki/Pearsons) tools
 
 ```shell
@@ -468,7 +468,7 @@ squeue -u lmc0633 -o "%A %T %j %E %R" | column -t
 echo -e "All chromosomes have been analyzed"
 ```
 
-#### HiC Resolution
+### HiC Resolution
 Below is a sample script to calculate resolution for all HiC files
 
 ```shell
@@ -496,7 +496,7 @@ do
 done
 
 ```
-#### HICCUPS
+### HICCUPS
 Below is a sample script to find loops using Juicer's [HICCUPS](https://github.com/aidenlab/juicer/wiki/HiCCUPS). You must use the genomics-GPU node for HICCUPS.
 
 ```shell
@@ -548,7 +548,7 @@ done
 
 ```
 
-#### Arrowhead
+### Arrowhead
 
 Arrowhead is the domain identification algorithm used in [Rao et. al., 2014](https://www.cell.com/fulltext/S0092-8674(14)01497-4). It's the most commonly used TAD caller currently. Arrowhead usage is as follows: <kbd>arrowhead (HiC file) (output_file)</kbd>. Documentation can be found [here](https://github.com/aidenlab/juicer/wiki/Arrowhead) <kbd>-r</kbd> resolution  <kbd>-k</kbd> normalization (NONE/VC/VC_SQRT/KR). The HiC files it takes for input are those generated by <kbd>Juicer.sh</kbd> or <kbd>Mega.sh</kbd>.
 
@@ -602,7 +602,7 @@ done
 ```
 
 
-#### APA
+### APA
 Below is a sample script to find loops using Juicer's [Aggregate Peak Analysis](https://github.com/aidenlab/juicer/wiki/APA). You must use the genomics-GPU node for APA.
 
 ```shell
