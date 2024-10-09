@@ -1,0 +1,597 @@
+---
+title: "Figure Plots"
+author: "Lucas Carter"
+date: "2024-10-09"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Figure Panels
+
+This file contains the code necessary for generating the image data figures in each panel of **"Extra-nucleolar Pol I regulates gene transcription through chromatin domain maintenance"**. RNAseq, Cut&Tag, and Hi-C analysis code used to generate plots in figure panels 3,4,6,and 7 are in separate markdowns.
+
+#### Load initial packages here  
+
+Loads initial packages and set root directory where dryad repository is stored
+
+```{r, message=FALSE, warning=FALSE}
+  
+rm(list = ls())
+
+## Set your root directory here
+root<- "/Volumes/external hd/IBiS/Backman_Lab/Transcription Publication/repositories/dryad/"
+
+# import packages
+require("ggplot2")
+require("dplyr")
+require("tidyr")
+require("magrittr")
+require("plyranges")
+require("GenomicRanges")
+require("forcats")
+require("ggforce")
+require("PupillometryR")
+require("plyr")
+require("stats")
+require("RColorBrewer")
+
+```
+
+
+#### Load functions
+
+
+```{r, message=FALSE, warning=FALSE}
+
+## Reorganize data
+col_Data <- function(label, file, dir) {
+  
+  require(dplyr)  
+  
+  data <- read.table(file.path(root,dir, file), sep= ",", header= T)
+  
+  rownames(data) <- data$X
+  data <- data[,-c(1)]
+  x <- t(as.matrix(data))
+  x <- data.frame(x) %>% mutate(analysis = rep(label, nrow(x)), n = seq(1,nrow(x)))
+  
+  return(x)
+}
+
+## Plot boxplots with p-values
+plot_Box <- function(data, label, ylab,col.y, col.x, scale) {
+  
+  require(ggpubr)
+  require(ggplot2)
+  
+  my_comparisons <- list( c("pol2", "wt"), c("pol1", "wt") )
+  colors <- c("#39b185","#eeb479","#cf597e")
+  
+  p <- ggplot(data, aes_string(x={{col.x}}, y = {{col.y}},  color={{col.x}})) +
+    geom_boxplot(linetype = "dashed", size=0.5, outlier.shape = 1) +
+    stat_boxplot(aes(ymin = ..lower.., ymax = ..upper..), outlier.shape = 1) +
+    stat_boxplot(geom = "errorbar", aes(ymin = ..ymax..)) +
+    stat_boxplot(geom = "errorbar", aes(ymax = ..ymin..)) + scale +
+    ggtitle(paste0(label)) + xlab("") + ylab(ylab)+ scale_x_discrete(labels = c("Pol 1", "Pol 2", "WT"))+
+    theme_classic() + theme(legend.position="",plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),text = element_text(size=14, family="Arial"), axis.text.x = element_text(angle = 0), panel.border = element_rect(linetype = "solid", colour = "black", fill = "NA", size = 0.5)) + stat_compare_means(label = "p.format", comparisons = my_comparisons, method = "t.test",ref.group = ".all.") 
+  
+  print(p)
+  
+}
+
+## Plot chromSTEM data as violin
+plot_violin <- function(data, title, xlab, ylab, y.pos,col.y, col.x, cols, comps) {
+  
+  require(ggpubr)
+  require(ggplot2)
+  
+  my_comparisons <- comps
+  
+  p <- ggplot(data, aes_string(x={{col.x}}, y = {{col.y}},  color={{col.x}}, fill={{col.x}})) +
+    geom_flat_violin(color = NA,trim = F, position = position_nudge(x = .15))+ 
+    stat_boxplot(geom = "errorbar", width = 0.15, aes(color = "black")) +
+    geom_boxplot(width = 0.25,notch=TRUE, notchwidth = 0.8, outlier.shape = NA)+ scale_color_manual(values=rep("black", length(unique(data$cond))+1))+ scale_fill_manual(values = cols) +
+    ggtitle(paste0(title)) + xlab("") + ylab(ylab)+ scale_x_discrete(labels = xlab)+
+    theme_classic() + theme(legend.position="",plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),text = element_text(size=14, family="Arial"), axis.text.x = element_text(angle = 0),
+                            panel.border = element_rect(linetype = "solid", colour = "black", fill = "NA", size = 0.5)) + 
+    stat_compare_means(#label = "p.format",
+      label = "p.signif",
+      comparisons = my_comparisons, 
+      #method = "t.test", 
+      ref.group = ".all.", ## for multiple comparisons
+      label.y = y.pos
+    ) 
+  
+  print(p)
+  
+}
+
+```
+
+#### Figure 1A-C:
+
+These are plots of PWS data in which HCT116 cells were treated with 5 µg/mL of Act D for 1 hour: A) Chromatin packing scaling (nucleus average) B) Chromatin diffusion C) Fractional moving mass. Refer to [Label-free imaging of the native, living cellular nanoarchitecture using partial-wave spectroscopic microscopy](https://www.pnas.org/doi/10.1073/pnas.1608198113) for details on PWS.
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+##-------------------------------------------------------## PWS HCT116 ActD
+
+## Function to extract basic statistics from data
+data_summary <- function(x) {
+  m <- mean(x)
+  ymin <- m-sd(x)
+  ymax <- m+sd(x)
+  return(c(y=m,ymin=ymin,ymax=ymax))
+}
+
+dir.data <- "PWS"
+list.files(dir.data)
+
+## Get data
+data <- data.frame(read.table(file.path(root, dir.data, "010123_HCT116_ActD_D values.csv"), sep= ",", header= TRUE))
+
+## Calculate P values
+x <- data[data$Name ==  "ActD",] 
+y <- data[data$Name == "DMSO",]
+
+t.test(x$D, y$D, alternative = "two.sided", var.equal = F)
+t.test(x$Diffusion, y$Diffusion, alternative = "two.sided", var.equal = FALSE)
+t.test(x$FMM, y$FMM, alternative = "two.sided", var.equal = FALSE)
+
+## Plot chromatin packign scaling
+data %>%
+  mutate(Name = fct_reorder(Name, Factor)) %>% 
+  ggplot( aes(x=Name, y=D, fill=Name, colour = Name)) +
+  geom_violin(trim=F, size = 0.1) +
+  scale_fill_manual(values=c("#cf597e","#faa476"))+ 
+  scale_color_manual(values=c("black","black","black"))+ theme_classic() +
+  stat_summary(fun.data=data_summary, geom="pointrange", color="black")+
+  scale_x_discrete( labels =c("DMSO Control", "1 Hour Act D"))+
+  scale_y_continuous(breaks = c(2.2, 2.4, 2.6, 2.8, 3.0),limits = c(2.2, 3.0))+
+  theme(legend.position="none", plot.title = element_text(size=16), text = element_text(size = 16), axis.text.x = element_text(angle = 0)) +
+  ggtitle("Chromatin Packing Scaling") + ylab("Chromatin Packing Scaling, D") + xlab("")
+
+## Plot chromatin diffusion
+data %>%
+  mutate(Name = fct_reorder(Name, Factor)) %>% 
+  ggplot( aes(x=Name, y=Diffusion, fill=Name, colour = Name)) +
+  geom_violin(trim=F, size = 0.1) +
+  scale_fill_manual(values=c("#cf597e","#faa476"))+ 
+  scale_color_manual(values=c("black","black","black"))+ 
+  theme_classic() +
+  stat_summary(fun.data=data_summary, geom="pointrange", color="black")+
+  scale_x_discrete( labels =c("DMSO Control", "1 Hour Act D"))+
+  scale_y_continuous(breaks = c(0, 0.001, 0.002, 0.003, 0.004),limits = c(0.00, 0.004))+
+  theme(legend.position="none", plot.title = element_text(size=16), text = element_text(size = 16), axis.text.x = element_text(angle = 0)) +
+  ggtitle("Chromatin Diffusion") + ylab("Diffusion, µm^2 s^(−1)") + xlab("")
+
+## Plot fractional moving mass
+data %>%
+  mutate(Name = fct_reorder(Name, Factor)) %>% 
+  ggplot( aes(x=Name, y=FMM, fill=Name, colour = Name)) +
+  geom_violin(trim=F, size = 0.1) +
+  scale_fill_manual(values=c("#cf597e","#faa476"))+ 
+  scale_color_manual(values=c("black","black","black"))+ 
+  theme_classic() +
+  stat_summary(fun.data=data_summary, geom="pointrange", color="black")+
+  scale_x_discrete( labels =c("DMSO Control", "1 Hour Act D"))+
+  scale_y_continuous(breaks = c(2e-20, 1e-19, 2e-19, 3e-19, 4e-19, 5e-19, 6e-19, 7e-19),limits = c(0, 7e-19))+
+  theme(legend.position="none", plot.title = element_text(size=16), text = element_text(size = 16), axis.text.x = element_text(angle = 0)) +
+  ggtitle("Fractional Moving Mass"
+          #" 40 nM Act D | 1 uM CX5461"
+  ) + ylab("Fractional Moving Mass (g)") + xlab("")
+```
+
+#### Figure 1D-F:
+
+These are plots of chromatin electron microscopy data in which HCT116 cells were treated with 5 µg/mL of Act D for 1 hour prior to fixation and imaging: D) Chromatin packing scaling (domains) E) Chromatin domain radius F) Chromatin volume concentration for domains. Refer to [Analysis of three-dimensional chromatin packing domains by chromatin scanning transmission electron microscopy (ChromSTEM)](https://www.nature.com/articles/s41598-022-16028-2) for details on chromSTEM.
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+
+##-------------------------------------------------------## PWS HCT116 ActD
+
+dir.data <- "/ChromSTEM/ActD Chrom STEM" 
+list.files(dir.data)
+
+data <- data.frame(read.table(file.path(root,dir.data, "Chrom_STEM_Domains.csv"), sep= ",", header= TRUE))
+
+## Calculate P values
+x <- data[data$Cond ==  "ActD",] 
+y <- data[data$Cond == "DMSO",]
+
+t.test(x$D, y$D, alternative = "two.sided", var.equal = F)
+t.test(x$Rf, y$Rf, alternative = "two.sided", var.equal = FALSE)
+t.test(x$CVC, y$CVC, alternative = "two.sided", var.equal = FALSE)
+
+## Plot of packing scaling
+data %>%
+  mutate(Cond = fct_reorder(Cond, factor)) %>% 
+  ggplot( aes(x=Cond, y=D, fill=Cond, colour = Cond)) +
+  geom_flat_violin(color = NA, trim = F, position = position_nudge(x = .15))+
+  scale_fill_manual(values=c("#cf597e","#faa476"))+ # Top2a
+  scale_color_manual(values=c("black","black","black"))+ # Top2a
+  stat_boxplot(geom = "errorbar", width = 0.15, aes(color = "grey")) +theme_classic() +
+  geom_boxplot(width = 0.25,notch=TRUE, notchwidth = 0.8, outlier.shape = NA)+
+  scale_x_discrete( labels =c("DMSO Control", "1 Hour Act D"))+
+  scale_y_continuous(breaks = c(2.0, 2.2, 2.4, 2.6, 2.8, 3.0),limits = c(2.0, 3.0))+
+  theme(legend.position="none", plot.title = element_text(size=16), text = element_text(size = 16), axis.text.x = element_text(angle = 0)) +
+  ggtitle("Chromatin Packing Scaling") + ylab("Chromatin Packing Scaling, D")
+
+## Plot of domain radius distribution
+data %>%
+  mutate(Cond = fct_reorder(Cond, factor)) %>% 
+  ggplot( aes(x=Cond, y=Rf, fill=Cond, colour = Cond)) +
+  geom_flat_violin(color = NA,trim = F, position = position_nudge(x = .15))+ 
+  scale_fill_manual(values=c("#cf597e","#faa476"))+ # Top2a
+  scale_color_manual(values=c("black","black","black"))+ # Top2a
+  stat_boxplot(geom = "errorbar", width = 0.15, aes(color = "grey")) +
+  theme_classic() +
+  geom_boxplot(width = 0.25,notch=TRUE, notchwidth = 0.8, outlier.shape = NA)+
+  scale_x_discrete( labels =c("DMSO Control", "1 Hour Act D"))+
+  theme(legend.position="none", plot.title = element_text(size=16), text = element_text(size = 16), axis.text.x = element_text(angle = 0)) + ggtitle("Domain Radius") + ylab("Domain Radius (nm)")
+
+# Plot of domain CVC distribution
+data %>%
+  mutate(Cond = fct_reorder(Cond, factor)) %>% 
+  ggplot( aes(x=Cond, y=CVC, fill=Cond, colour = Cond)) +
+  geom_flat_violin(color = NA,trim = F, position = position_nudge(x = .15))+ 
+  scale_fill_manual(values=c("#cf597e","#faa476"))+ # Top2a
+  scale_color_manual(values=c("black","black","black"))+ # Top2a
+  stat_boxplot(geom = "errorbar", width = 0.15, aes(color = "grey")) +
+  theme_classic() +
+  geom_boxplot(width = 0.25,notch=TRUE, notchwidth = 0.8, outlier.shape = NA)+
+  scale_x_discrete( labels =c("DMSO Control", "1 Hour Act D"))+
+  theme(legend.position="none", plot.title = element_text(size=16), text = element_text(size = 16), axis.text.x = element_text(angle = 0)) +ggtitle("Domain CVC") + ylab("Chromatin Volume Concentration")
+
+```
+
+
+#### Figure 1J-K,L:
+
+These are plots of single molecule localization microscopy data in which HCT116 cells were treated with 5 µg/mL of Act D for 1 hour and stained for POLR2A-PS5 and H3K9me3: J) Kernel density estimate of H3K9me3 E) Kernal density estimate of POLR2A-PS5 L) Association profile of Pol-II molecules with heterochromatin (H3K9me3) clusters. Refer to [Nanoscale chromatin imaging and analysis platform bridges 4D chromatin organization with molecular function](https://pubmed.ncbi.nlm.nih.gov/33523864/) for information on how SMLM is used in this context.
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+
+##-------------------------------------------------------## SMLM HCT116 ActD
+
+## Directory
+dir.data <- "/SMLM/H3K9Me3 Pol2 Assoc SMLM"
+
+## bring in data
+pol2.prob <- read.table(file.path(root,dir.data, "pol2density.csv"), sep= ",", header= T)
+K9.clus <- read.table(file.path(root,dir.data,"k9clustersize.csv"), sep= ",", header= T)
+
+## remove NAs
+pol2.prob <- na.omit(pol2.prob )
+K9.clus <- na.omit(K9.clus)
+
+## Prepare data for plotting
+ko.p2 <- data.frame(y = pol2.prob$Act.D/sum(pol2.prob$Act.D), x = pol2.prob$Act.D, group = rep("Act D", length(pol2.prob$Act.D)))
+ctrl.p2 <- data.frame(y = pol2.prob$DMSO/sum(pol2.prob$DMSO), x = pol2.prob$DMSO, group = rep("DMSO", length(pol2.prob$DMSO)))
+p2.df <- rbind(ko.p2,ctrl.p2)
+
+ko.k9 <- data.frame(y = K9.clus$Act.D/sum(K9.clus$Act.D), x = K9.clus$Act.D, group = rep("Act D", length(K9.clus$Act.D)))
+ctrl.k9 <- data.frame(y = K9.clus$DMSO/sum(K9.clus$DMSO), x = K9.clus$DMSO, group = rep("DMSO", length(K9.clus$DMSO)))
+k9.df <- rbind(ko.k9,ctrl.k9)
+
+cols <- c("#cf597e","#faa476")
+
+## pol2 statistics
+mu <- ddply(p2.df, "group", summarise, mean=median(x))
+
+## pol2.density.plot
+ggplot(p2.df, aes(x = x, fill = group)) +
+  geom_density(alpha = 0.8, color = NA)+
+  scale_x_continuous(limit = c(0,1000))+
+  scale_fill_manual(values = cols) + theme_classic()+
+  geom_vline(data=mu, aes(xintercept=mean, color=group),linetype="dashed")+
+  theme( legend.position="bottom",plot.title = element_text(size=16), text = element_text(size=16, family="Arial"), axis.text.x = element_text(angle = 0)) +
+  ggtitle("1 Hour Act D (5 µg/mL)") + xlab("RNAP II Density (1/µm^2)") + ylab("Density")
+
+## K9 statistics
+mu <- ddply(k9.df, "group", summarise, mean=median(x))
+
+## K9.density.plot
+ggplot(k9.df, aes(x = x, fill = group)) +
+  geom_density(alpha = 0.8, color = NA) + scale_x_continuous(limit = c(0,2))+
+  scale_fill_manual(values = cols) + theme_classic()+
+  geom_vline(data=mu, aes(xintercept=mean, color=group),linetype="dashed")+
+  theme( legend.position="bottom",plot.title = element_text(size=16), text = element_text(size=16, family="Arial"), axis.text.x = element_text(angle = 0)) +
+  ggtitle("1 Hour Act D (5 µg/mL)") + xlab("Relative K9me3 Cluster Area") +ylab("Density")
+
+## Plot association data
+assoc <- read.table(file.path(root, dir.data, "pol2_associationPlot.csv"), sep= ",", header= T)
+assoc$fact <- as.numeric(c(1,2,1,2))
+cols <- c("#cf597e","#faa476")
+
+assoc %>% 
+  mutate(cond = fct_reorder(cond, as.numeric(fact))) %>% 
+  ggplot(aes(x = loc, y = value, fill = cond)) + 
+  geom_bar(stat="identity", position=position_dodge(), color = "black") + scale_fill_manual(values = cols) + theme_classic()+
+  theme( legend.position="bottom",plot.title = element_text(size=16), text = element_text(size=16, family="Arial"), axis.text.x = element_text(angle = 0)) +
+  ggtitle("1 Hour Act D (5 µg/mL)") + xlab("Condition") + ylab("RNAPII Association") +scale_y_continuous(labels = scales::percent) +
+  geom_text(aes(label= paste0(round(value*100, 2),"%")), vjust=1.6, color="white",
+            position = position_dodge(0.9), size=3.5)
+
+```
+
+
+#### Figure 2B:
+
+This is a plot of CTCF values for EU-labelled nascent RNA following degradation of POLR1A, POLR2A, or treatment with  5 µg/mL of Act D for 1 hour or 6 hours.
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+
+##-------------------------------------------------------## EU Click It Widefield CTCF results
+
+## Directory
+dir.data <- "EU_widefield"
+list.files(dir.data)
+
+## Read in data
+df <- data.frame(read.table(file.path(root, dir.data, "CTCF_data_final.csv"), sep= ",", header= TRUE))
+
+## Calculate P values # (POLR1A: N = 172; POLR2A: N = 142; 6hrActD: N=20; 1hrActD: N=28; DMSO: N= 204)
+x <- df[df$condition ==  "Pol1_6hrs_Aux_R1",] 
+x <- df[df$condition ==  "Pol2_6hrs_Aux_R1",]
+x <- df[df$condition ==  "rad21_6hrs_Aux_R1",]
+x <- df[df$condition ==  "wt_6hractd",]
+x <- df[df$condition ==  "wt_1hractd",]
+y <- df[df$condition == "all_dmso",]
+
+t.test(as.numeric(x$CTCF), as.numeric(y$CTCF), alternative = "two.sided", var.equal = F)
+unique(df$condition)
+
+colors <- c("#009392","#39b185","#9ccb86","#eeb479","#e88471")
+
+df <- df[!df$condition == "rad21_6hrs_Aux_R1",] ## Remove Rad21 from dataset
+
+## Plot CTCF values
+df %>%
+  mutate(condition= fct_reorder(condition, as.numeric(factor))) %>% 
+  ggplot( aes(x=condition, y=as.numeric(CTCF), fill=condition, colour = condition)) +
+  geom_flat_violin(color = NA,trim = F, position = position_nudge(x = .15))+ 
+  scale_fill_manual(values=colors)+ # Top2a
+  scale_color_manual(values=c("black","black","black", "black","black","black","black"))+ 
+  stat_boxplot(geom = "errorbar", width = 0.15, aes(color = "grey"), notch = FALSE) +
+  theme_classic() +
+  geom_boxplot(width = 0.25,notch=TRUE, notchwidth = 0.8, outlier.shape = NA)+
+  scale_x_discrete( labels =c("Pol 1 6hrs Aux", "Pol 2 6hrs Aux","1hrs Act D","6hrs Act D", "DMSO Control"))+
+  scale_y_continuous(breaks = c(0, 5000, 10000, 15000, 20000, 25000, 30000, 35000, 40000, 45000, 50000),limits = c(-5000, 50000))+
+  theme(legend.position="none", plot.title = element_text(size=11), axis.text.x = element_text(angle = 0)) + coord_flip() + ggtitle("EU Signal Intensity - Widefield") + ylab("Corrected Total Cell Fluorescence") +xlab("") +theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1, size = 12),axis.text.y = element_text(angle = 0,size = 12))
+
+```
+
+#### Figure 2F-H:
+
+These are plots of single molecule localization microscopy data for EU-labelled nascent RNA following degradation of POLR1A or POLR2A: F) Blink density of reconstructed SMLM images for each condition G) Cluster density of RNA for each condition, quantified using DBscan F) size of RNA clusters, quantified using DBscan.
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+
+##-------------------------------------------------------## EU Click It STORM results
+## Directory
+dir.data <- '/SMLM/EU SMLM/20240524'
+list.files(dir.data)
+
+## gather all data # (POLR1A: N = 22; POLR2A: N = 18; DMSO: N= 28). 
+p1.nuc <- col_Data("pol1", "POLR1A_Auxin_nucleus.csv", dir=dir.data)
+p2.r1.nuc <- col_Data("pol2", "POLR2A_Auxin_nucleus.csv", dir=dir.data) ## old pol 2 data (sparse)
+p2.r2.nuc <- col_Data("pol2", "POLR2A_Auxin_nucleus_071724.csv", dir=dir.data) ## updated pol 2 data from 071724
+wt.r1.nuc <- col_Data("wt", "WT_DMSO_nucleus.csv", dir=dir.data) ## old wt data
+wt.r2.nuc <- col_Data("wt", "WT_DMSO_nucleus_071724.csv", dir=dir.data) ## updated wt data from 071724
+nuc.plt <- rbind(p1.nuc, p2.r1.nuc, p2.r2.nuc, wt.r1.nuc, wt.r2.nuc)
+
+colnames(nuc.plt ) <- c("num_blinks", "num_clust", "cluster_mean_size", "roi", "num_cluster_perUm2", "num_blink_perUm2", "analysis", "n")
+
+## Blinks
+plot_Box(data = nuc.plt, label = "Blink Density | Nucleus | EU STORM", ylab = "Blinks / µm^2",col.x = "analysis", col.y="num_blink_perUm2", scale = scale_color_manual(values = colors)) # nuc.blinks.box
+plot_Box(data = nuc.plt, label = "Cluster Density | Nucleus | EU STORM", ylab = "Clusters / µm^2",col.x = "analysis", col.y="num_cluster_perUm2", scale = scale_color_manual(values = colors)) # nuc.clust.box
+plot_Box(data = nuc.plt, label = "Cluster Size | Nucleus | EU STORM", ylab = "Clusters / µm^2",col.x = "analysis", col.y="cluster_mean_size", scale = scale_color_manual(values = colors)) # nuc.clustsize.box
+
+```
+
+
+#### Figure 5D-F:
+
+These are plots of single molecule localization microscopy data for H3K9me3-labelled DNA following degradation of POLR1A or POLR2A: F) Blink density of reconstructed SMLM images for each condition G) Cluster density of RNA for each condition, quantified using DBscan F) size of RNA clusters, quantified using DBscan.
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+
+##-------------------------------------------------------## H3K9me3 SMLM results
+
+## Directory 1
+dir <- '/SMLM/H3K9Me3 SMLM/20240514'
+
+## gather all data REP1 # (DMSO: N = 50; POLR1A: N=55 ; POLR2A: N= 53). 
+p1.int.r1 <- col_Data("pol1", "POLR1A_Auxin_interior.csv", dir=dir)
+p1.lam.r1 <- col_Data("pol1", "POLR1A_Auxin_lamin.csv", dir=dir)
+p1.nuc.r1 <- col_Data("pol1", "POLR1A_Auxin_nucleus.csv", dir=dir)
+p2.int.r1 <- col_Data("pol2", "POLR2A_Auxin_interior.csv", dir=dir)
+p2.lam.r1 <- col_Data("pol2", "POLR2A_Auxin_lamin.csv", dir=dir)
+p2.nuc.r1 <- col_Data("pol2", "POLR2A_Auxin_nucleus.csv", dir=dir)
+wt.int.r1 <- col_Data("wt", "WT_DMSO_interior.csv", dir=dir)
+wt.lam.r1 <- col_Data("wt", "WT_DMSO_lamin.csv", dir=dir)
+wt.nuc.r1 <- col_Data("wt", "WT_DMSO_nucleus.csv", dir=dir)
+
+## Directory 2
+dir <- '/SMLM/H3K9Me3 SMLM/20240522'
+list.files(dir)
+
+## gather all data REP2
+p1.int.r2 <- col_Data("pol1", "POLR1A_Auxin_interior.csv", dir=dir)
+p1.lam.r2 <- col_Data("pol1", "POLR1A_Auxin_lamin.csv", dir=dir)
+p1.nuc.r2 <- col_Data("pol1", "POLR1A_Auxin_nucleus.csv", dir=dir)
+p2.int.r2 <- col_Data("pol2", "POLR2A_Auxin_interior.csv", dir=dir)
+p2.lam.r2 <- col_Data("pol2", "POLR2A_Auxin_lamin.csv", dir=dir)
+p2.nuc.r2 <- col_Data("pol2", "POLR2A_Auxin_nucleus.csv", dir=dir)
+wt.int.r2 <- col_Data("wt", "WT_DMSO_interior.csv", dir=dir)
+wt.lam.r2 <- col_Data("wt", "WT_DMSO_lamin.csv", dir=dir)
+wt.nuc.r2 <- col_Data("wt", "WT_DMSO_nucleus.csv", dir=dir)
+
+## bind
+int.plt <- rbind(p1.int.r1, p2.int.r1, wt.int.r1, p1.int.r2, p2.int.r2, wt.int.r2)
+lam.plt <- rbind(p1.lam.r1, p2.lam.r1, wt.lam.r1,p1.lam.r2, p2.lam.r2, wt.lam.r2)
+nuc.plt <- rbind(p1.nuc.r1, p2.nuc.r1, wt.nuc.r1,p1.nuc.r2, p2.nuc.r2, wt.nuc.r2)
+
+colnames(int.plt ) <- c("num_blinks", "num_clust", "cluster_mean_size", "roi", "num_cluster_perUm2", "num_blink_perUm2", "analysis", "n")
+colnames(lam.plt ) <- c("num_blinks", "num_clust", "cluster_mean_size", "roi", "num_cluster_perUm2", "num_blink_perUm2", "analysis", "n")
+colnames(nuc.plt ) <- c("num_blinks", "num_clust", "cluster_mean_size", "roi", "num_cluster_perUm2", "num_blink_perUm2", "analysis", "n")
+
+## Plot the blink density
+plot_Box(data = int.plt, label = "Blink Density | Interior | K9 STORM", ylab = "Blinks / µm^2", col.x = "analysis", col.y="num_blink_perUm2", scale = scale_color_brewer(palette="Dark2")) # interior.blinks.box
+plot_Box(data = lam.plt, label = "Blink Density | Lamina | K9 STORM", ylab = "Blinks / µm^2",col.x = "analysis", col.y="num_blink_perUm2", scale = scale_color_brewer(palette="Dark2")) # lamin.blinks.box
+plot_Box(data = nuc.plt, label = "Blink Density | Nucleus | K9 STORM", ylab = "Blinks / µm^2",col.x = "analysis", col.y="num_blink_perUm2", scale = scale_color_brewer(palette="Dark2")) # nuc.blinks.box
+
+## Plot the number of Clusters
+plot_Box(data = int.plt, label = "Cluster Density | Interior | K9 STORM", ylab = "Clusters / µm^2", col.x = "analysis", col.y="num_cluster_perUm2", scale = scale_color_brewer(palette="Dark2")) # interior.clust.box
+plot_Box(data = lam.plt, label = "Cluster Density | Lamina | K9 STORM", ylab = "Clusters / µm^2",col.x = "analysis", col.y="num_cluster_perUm2", scale = scale_color_brewer(palette="Dark2")) # lamin.clust.box
+plot_Box(data = nuc.plt, label = "Cluster Density | Nucleus | K9 STORM", ylab = "Clusters / µm^2",col.x = "analysis", col.y="num_cluster_perUm2", scale = scale_color_brewer(palette="Dark2")) # nuc.clust.box
+
+## Plot the cluster size
+plot_Box(data = int.plt, label = "Cluster Size | Interior | K9 STORM", ylab = "Clusters / µm^2", col.x = "analysis", col.y="cluster_mean_size", scale = scale_color_brewer(palette="Dark2")) # interior.clustsize.box
+plot_Box(data = lam.plt, label = "Cluster Size | Lamina | K9 STORM", ylab = "Clusters / µm^2",col.x = "analysis", col.y="cluster_mean_size", scale = scale_color_brewer(palette="Dark2")) # lamin.clustsize.box
+plot_Box(data = nuc.plt, label = "Cluster Size | Nucleus | K9 STORM", ylab = "Clusters / µm^2",col.x = "analysis", col.y="cluster_mean_size", scale = scale_color_brewer(palette="Dark2")) # nuc.clustsize.box
+
+```
+
+
+#### Figure 5I:
+
+HCT116 POLR1A-AID1 cells were treated with auxin for 6 hours prior to fixation and imaging using chromSTEM. DBscan was used to find domain centers. Statistics for each domain were generated. This plots packing efficiency versus domain size for domains identified with DBscan.
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+
+##-------------------------------------------------------## Plot quadrants
+
+## Directory
+dir.data <- "/ChromSTEM/Pol1 Chrom STEM"
+list.files(dir.data)
+
+## Get data
+data <- data.frame(read.table(file.path(root,dir.data, "alldomains.csv"), sep= ",", header= TRUE))
+data.p <- data[data$cond =="Pol1_6hrs_Aux" | data$cond =="WT_DMSO" ,]
+
+## prepare data for plotting
+data.p$lab <- NA
+pe <- median(data.p$PackEff)
+rad <- median(data.p$Rmax)
+
+## Split data up into quarter
+data.p$lab[data.p$PackEff > pe & data.p$Rmax < rad] <- "Decaying"
+data.p$lab[data.p$PackEff > pe & data.p$Rmax > rad] <- "Large Mature"
+data.p$lab[data.p$PackEff < pe & data.p$Rmax > rad] <- "Small Mature"
+data.p$lab[data.p$PackEff < pe & data.p$Rmax < rad] <- "Nascent"
+data.p$lab[data.p$cond =="WT_DMSO"] <- "WT CTRL"
+
+cols = c( "#7570B3", "#E7298A", "#66A61E", "#E6AB02", "#c0c0c0")
+
+##  Plot domains
+ggplot(data.p, aes(x=Rmax, y=PackEff, col=lab)) +
+  scale_y_continuous(limits = c(0.3,1))+scale_x_continuous(limits = c(0,250))+
+  geom_point(alpha=0.8, size = 3)+ theme_pubr()+
+  scale_color_manual(values=cols, aesthetics = c("color", "fill"))+
+  geom_vline(xintercept=rad, col="darkred", lty = "dashed") +theme( legend.position="left",plot.title = element_text(size=16), plot.subtitle = element_text(size=12), text = element_text(size=16, family="Arial"), axis.text.x = element_text(angle = 0)) +
+  geom_hline(yintercept=pe, col="darkred", lty = "dashed") + ylab("Packing Efficiency")+ xlab("Domain Radius (nm)")
+
+```
+
+
+#### Figure 5J-L:
+
+HCT116 POLR1A-AID1 cells were treated with auxin for 6 hours prior to fixation and imaging using chromSTEM. DBscan was used to find domain centers. Statistics for each domain were generated. This code generates violin plots for J) Chromatin packing scaling (domains) K) Chromatin domain radius L) Chromatin volume concentration for domains. Refer to [Analysis of three-dimensional chromatin packing domains by chromatin scanning transmission electron microscopy (ChromSTEM)](https://www.nature.com/articles/s41598-022-16028-2) for details on chromSTEM.
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+##-------------------------------------------------------## Plot chromSTEM domain statistics
+
+## Directory
+dir.data <- "/ChromSTEM/Pol1 Chrom STEM"
+list.files(dir.data)
+
+## Get data
+data <- data.frame(read.table(file.path(root,dir.data, "alldomains.csv"), sep= ",", header= TRUE))
+data.p <- data[data$cond =="Pol1_6hrs_Aux" | data$cond =="WT_DMSO" ,]
+
+brewer.pal(6, "Dark2")
+cols <- c("#7570B3", "#E6AB02")
+
+## single comparisons
+plot_violin(data=data.p, title = "Chromatin Packing Scaling", ylab = "D", xlab=c("Pol 1", "WT"), y.pos = 2.95, col.y = "D", col.x="cond", cols= cols, comps = list(c("Pol1_6hrs_Aux", "WT_DMSO" )))
+plot_violin(data=data.p, title = "Domain Radius", ylab = "Domain Radius (nm)", xlab=c("Pol 1", "WT"), y.pos = 225, col.y = "Rmax", col.x="cond", cols= cols, list(c("Pol1_6hrs_Aux", "WT_DMSO" )))
+plot_violin(data=data.p, title = "Domain CVC", ylab = "Chromatin Volume Concentration", xlab=c("Pol 1", "WT"), y.pos = 0.5, col.y = "Density", col.x="cond", cols= cols, comps = list(c("Pol1_6hrs_Aux", "WT_DMSO" ))) 
+
+cols <- c("#7570B3", "#E6AB02","#66A61E")
+
+## Multiple comparisons
+plot_violin(data=data, title = "Chromatin Packing Scaling", ylab = "D", xlab=c("Pol 1 Aux","Pol 1 DMSO",  "WT DMSO"), y.pos = c(2.9, 2.95, 3), col.y = "D", col.x="cond", cols= cols, comps = list(c( "Pol1_DMSO", "WT_DMSO"  ),c( "Pol1_6hrs_Aux","Pol1_DMSO" ), c("Pol1_6hrs_Aux", "WT_DMSO" ))) 
+plot_violin(data=data, title = "Domain Radius", ylab = "Domain Radius (nm)", xlab=c("Pol 1 Aux","Pol 1 DMSO", "WT DMSO"), y.pos = c(210, 233, 245), col.y = "Rmax", col.x="cond", cols= cols, comps = list(c( "Pol1_DMSO", "WT_DMSO"  ),c( "Pol1_6hrs_Aux","Pol1_DMSO" ), c("Pol1_6hrs_Aux", "WT_DMSO" ))) 
+plot_violin(data=data, title = "Domain CVC", ylab = "Chromatin Volume Concentration", xlab=c("Pol 1 Aux","Pol 1 DMSO", "WT DMSO"), y.pos = c(0.45,0.5,0.55), col.y = "Density", col.x="cond", cols= cols, comps = list(c( "Pol1_DMSO", "WT_DMSO"  ),c( "Pol1_6hrs_Aux","Pol1_DMSO" ), c("Pol1_6hrs_Aux", "WT_DMSO" )))
+
+```
+
+#### Figure 6C:
+
+HCT116 cells were labelled for POLR1A and H3K9me3 and imaged using SMLM. Association of Pol-I with H3K9me3 clusters is plotted here for N=5 cells. Refer to [Nanoscale chromatin imaging and analysis platform bridges 4D chromatin organization with molecular function](https://pubmed.ncbi.nlm.nih.gov/33523864/) for information on how SMLM is used in this context.
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+##-------------------------------------------------------## Plot chromSTEM domain statistics
+
+## Directory
+dir.data <- "/SMLM/H3K9me3 Pol1 Assoc SMLM"
+
+## Nico gave me these backwards for some reason. So they are entered in backwards here, to fix that
+k9.clus <- read.table(file.path(root, dir.data, "Pol1_dataCompiled_pol1DensV3.csv"), sep= ",", header= T)
+pol1.prob <- read.table(file.path(root, dir.data, "Pol1_dataCompiled_k9clustersizeV3.csv"), sep= ",", header= T)
+
+## remove NAs
+pol1.prob <- na.omit(pol1.prob )
+k9.clus <- na.omit(k9.clus)
+
+## Prepare data for plotting
+p1.df <- data.frame(x = sort(pol1.prob$CTRL), group = rep("Pol 1", nrow(pol1.prob)))
+k9.df <- data.frame(x = sort(k9.clus$K9_Pol1), group = rep("K9", nrow(k9.clus) ) )
+
+## Statistics on Pol1 SMLM
+mu <- ddply(p1.df, "group", summarise, mean=mean(x))
+
+## pol1.density.plot
+ggplot(p1.df, aes(x = x, fill = "black")) +
+  geom_density(alpha = 0.8, fill = "black",color = "black")+
+  scale_x_continuous(limit = c(0,500))+
+  scale_fill_manual(values = cols) + theme_classic()+
+  geom_vline(data=mu, aes(xintercept=mean, color=group),linetype="dashed")+
+  theme( legend.position="bottom",plot.title = element_text(size=16), text = element_text(size=16, family="Arial"), axis.text.x = element_text(angle = 0)) +
+  ggtitle(paste0("Mean: ", round(mu$mean, 2))) + xlab("RNAP I Density (1/µm^2)") + ylab("Density")
+
+## Statistics on K9 SMLM
+mu <- ddply(k9.df, "group", summarise, mean=mean(x))
+
+## K9.density.plot
+ggplot(k9.df, aes(x = x, fill = group)) +
+  geom_density(alpha = 0.8, trim = F, fill = "black",color = "black") + scale_x_continuous(limit = c(0,2))+
+  scale_fill_manual(values = cols) + theme_classic()+
+  geom_vline(data=mu, aes(xintercept=mean, color=group),linetype="dashed")+
+  theme( legend.position="bottom",plot.title = element_text(size=16), text = element_text(size=16, family="Arial"), axis.text.x = element_text(angle = 0)) +
+  ggtitle(paste0("Mean: ", round(mu$mean, 2))) + xlab("Relative K9me3 Cluster Area") + ylab("Density")
+
+## Plot association data
+assoc <- read.table(file.path(root,dir.data, "Pol1_rawData_pol1AffilFreqV2.csv"), sep= ",", header= T)
+colnames(assoc) <- c("X", "Unassociated", "Inside One Cluster", "Inside Mult. Clusters")
+assoc <- assoc %>% gather(key=loc, value = value, 2:4) %>% mutate(cell = as.numeric(X)) %>%  dplyr::rename(factor=X) ## prepare for plotting
+
+cols <- c("#A5AB77","#39b185","#009392")
+
+assoc<- ddply(assoc , "cell",transform, label_ypos=cumsum(value))
+
+assoc %>% 
+  mutate(cell = fct_reorder(as.character(cell), as.numeric(factor))) %>% 
+  ggplot(aes(x = cell, y = value, fill = loc)) + 
+  geom_bar(stat="identity", position="stack", color = NA) + scale_fill_manual(values = cols) + theme_classic()+
+  theme( legend.position="bottom",plot.title = element_text(size=16), text = element_text(size=16, family="Arial"), axis.text.x = element_text(angle = 0)) +
+  ggtitle("") + xlab("Cell") + ylab("RNAPI K9 Association") +scale_y_continuous(labels = scales::percent) +
+  geom_text(aes(y=label_ypos, label= paste0(round(value*100, 2),"%")), vjust=1.6, color="white", size=3.5)
+
+```
+
