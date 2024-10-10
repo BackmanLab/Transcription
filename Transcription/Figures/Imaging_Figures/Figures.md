@@ -307,3 +307,67 @@ function](https://pubmed.ncbi.nlm.nih.gov/33523864/) for information on
 how SMLM is used in this context.
 
 ![](Figures_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->![](Figures_files/figure-gfm/unnamed-chunk-11-2.png)<!-- -->![](Figures_files/figure-gfm/unnamed-chunk-11-3.png)<!-- -->
+
+    ## R version 4.3.3 (2024-02-29)
+    ## Platform: x86_64-apple-darwin20 (64-bit)
+    ## Running under: macOS Sonoma 14.2.1
+    ## 
+    ## Matrix products: default
+    ## BLAS:   /Library/Frameworks/R.framework/Versions/4.3-x86_64/Resources/lib/libRblas.0.dylib 
+    ## LAPACK: /Library/Frameworks/R.framework/Versions/4.3-x86_64/Resources/lib/libRlapack.dylib;  LAPACK version 3.11.0
+    ## 
+    ## locale:
+    ## [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+    ## 
+    ## time zone: America/Los_Angeles
+    ## tzcode source: internal
+    ## 
+    ## attached base packages:
+    ## [1] stats4    stats     graphics  grDevices utils     datasets  methods  
+    ## [8] base     
+    ## 
+    ## other attached packages:
+    ##  [1] ggpubr_0.6.0         RColorBrewer_1.1-3   plyr_1.8.9          
+    ##  [4] PupillometryR_0.0.5  rlang_1.1.4          ggforce_0.4.2       
+    ##  [7] forcats_1.0.0        plyranges_1.22.0     GenomicRanges_1.54.1
+    ## [10] GenomeInfoDb_1.38.8  IRanges_2.36.0       S4Vectors_0.40.2    
+    ## [13] BiocGenerics_0.48.1  magrittr_2.0.3       tidyr_1.3.1         
+    ## [16] dplyr_1.1.4          ggplot2_3.5.1       
+    ## 
+    ## loaded via a namespace (and not attached):
+    ##  [1] tidyselect_1.2.1            farver_2.1.2               
+    ##  [3] Biostrings_2.70.3           bitops_1.0-7               
+    ##  [5] fastmap_1.2.0               RCurl_1.98-1.14            
+    ##  [7] tweenr_2.0.3                GenomicAlignments_1.38.2   
+    ##  [9] XML_3.99-0.16.1             digest_0.6.35              
+    ## [11] lifecycle_1.0.4             compiler_4.3.3             
+    ## [13] tools_4.3.3                 utf8_1.2.4                 
+    ## [15] yaml_2.3.8                  rtracklayer_1.62.0         
+    ## [17] knitr_1.47                  ggsignif_0.6.4             
+    ## [19] S4Arrays_1.2.1              labeling_0.4.3             
+    ## [21] DelayedArray_0.28.0         abind_1.4-5                
+    ## [23] BiocParallel_1.36.0         withr_3.0.0                
+    ## [25] purrr_1.0.2                 grid_4.3.3                 
+    ## [27] polyclip_1.10-6             fansi_1.0.6                
+    ## [29] colorspace_2.1-0            scales_1.3.0               
+    ## [31] MASS_7.3-60.0.1             SummarizedExperiment_1.32.0
+    ## [33] cli_3.6.2                   rmarkdown_2.27             
+    ## [35] crayon_1.5.2                generics_0.1.3             
+    ## [37] rstudioapi_0.16.0           rjson_0.2.21               
+    ## [39] stringr_1.5.1               zlibbioc_1.48.2            
+    ## [41] parallel_4.3.3              XVector_0.42.0             
+    ## [43] restfulr_0.0.15             matrixStats_1.3.0          
+    ## [45] vctrs_0.6.5                 Matrix_1.6-5               
+    ## [47] carData_3.0-5               car_3.1-2                  
+    ## [49] rstatix_0.7.2               glue_1.7.0                 
+    ## [51] codetools_0.2-20            stringi_1.8.4              
+    ## [53] gtable_0.3.5                BiocIO_1.12.0              
+    ## [55] munsell_0.5.1               tibble_3.2.1               
+    ## [57] pillar_1.9.0                htmltools_0.5.8.1          
+    ## [59] GenomeInfoDbData_1.2.11     R6_2.5.1                   
+    ## [61] evaluate_0.24.0             lattice_0.22-6             
+    ## [63] Biobase_2.62.0              highr_0.11                 
+    ## [65] backports_1.5.0             Rsamtools_2.18.0           
+    ## [67] broom_1.0.6                 Rcpp_1.0.12                
+    ## [69] SparseArray_1.2.4           xfun_0.45                  
+    ## [71] MatrixGenerics_1.14.0       pkgconfig_2.0.3

@@ -1,0 +1,778 @@
+---
+title: "RNAseq"
+author: "Lucas Carter"
+date: "2024-10-09"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## RNAseq Figure Panel 3
+
+This file contains the code necessary for generating Figure Panel 3 using RNAseq data in **"Extra-nucleolar Pol I regulates gene transcription through chromatin domain maintenance"**. 
+
+#### Load initial packages here  
+
+Loads initial packages and set root directory where dryad repository is stored
+
+```{r, message=FALSE, warning=FALSE}
+
+# upregulated color: "#D46780"
+# downregulated color: "#798234"
+
+rm(list = ls())
+gc()
+
+## Directories
+## Set your root directory here
+root<- "/Volumes/external hd/IBiS/Backman_Lab/Transcription Publication/repositories/dryad/"
+
+## Dryad repository links
+dir.rsem.txi <- "/RNAseq/counts/RSEM/isoforms"
+dir.rsem <- "/RNAseq/counts/RSEM"
+dir.htseq <- "/RNAseq/counts/HTseq"
+
+# import packages
+require("DESeq2")
+require("ggplot2")
+require("dplyr")
+require("magrittr")
+require("tximport")
+require("forcats")
+require("stringr")
+require("matrixStats")
+require("ggrepel")
+require("pheatmap")
+require("viridis")
+require("dendsort")
+require("tidyr")
+require("ggpubr")
+require("ggside")
+
+```
+
+
+#### Load functions
+
+
+```{r, message=FALSE, warning=FALSE}
+## A function to filter results for top DE genes
+Filter_Results <- function(results, lfc.up=0.58, lfc.dwn=-0.58,pvadj=0.05) {
+  
+  resultsDN <- as.data.frame(results[which(results$log2FoldChange < lfc.dwn),])
+  resultsDN <- as.data.frame(resultsDN[which(resultsDN$padj <= pvadj),])
+  length(rownames(resultsDN)) ## Gives count of down regulated
+  
+  resultsUP <- as.data.frame(results[which(results$log2FoldChange  > lfc.up),])
+  resultsUP <- as.data.frame(resultsUP[which(resultsUP$padj <= pvadj),])
+  length(rownames(resultsUP)) ## Gives count of up regulated  
+  
+  ## add a column of NAs
+  results$diffexpressed <- "NO"
+  ## If log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
+  results$diffexpressed[results$log2FoldChange > lfc.up & results$padj <= pvadj] <- "Upregulated"
+  ## If log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
+  results$diffexpressed[results$log2FoldChange  < lfc.dwn & results$padj <= pvadj] <- "Downregulated"
+  
+  ## Make counts vectors
+  results$up <- ifelse(results$diffexpressed == "Upregulated", 1, 0)
+  results$down <- ifelse(results$diffexpressed == "Downregulated", 1, 0)
+  
+  ## Make lfc vectors
+  results$up.lfc <- ifelse(results$diffexpressed == "Upregulated", results$log2FoldChange, 0)
+  results$down.lfc <- ifelse(results$diffexpressed == "Downregulated", results$log2FoldChange, 0)
+  
+  ## Create a new column "delabel" to de, that will contain the name of genes differentially expressed (NA in case they are not)
+  results$delabel <- NA
+  results$delabel[results$diffexpressed != "NO"] <- results$symbol[results$diffexpressed != "NO"]
+  
+  return(results)
+  
+}
+
+
+## A function to annotate DGE results. If using transcript level quantification instead of gene level quant, set transcript=TRUE
+Annotate_results <- function(results, filename, transcript,
+                             dir.res = "RNAseq/results/DGE_counts"
+){
+  
+  require("AnnotationHub")
+  require("AnnotationDbi")
+  
+  ah <- AnnotationHub() ## Connect to Annotation Hub
+  
+  db <- query(ah, c("EnsDb","Homo sapiens","111"))[[1]] ## Make a query to your organism/database
+  results <- data.frame(results)
+  
+  if (transcript == F) {
+    
+    annotations <- genes(db, return.type = "data.frame")
+    annot <- annotations %>%
+      dplyr::select(gene_id, canonical_transcript, symbol,gene_biotype, seq_name, gene_seq_start, gene_seq_end) %>%
+      dplyr::filter(gene_id %in% rownames(results)) ## genes.results
+    
+    ## Order results to match them
+    order <- match(rownames(results), annot$gene_id) ## genes.results
+    annot <- annot[order,]
+    
+    ## Annotations
+    results$gene_id <- annot$gene_id
+    results$transcript <- annot$canonical_transcript
+    results$symbol <- annot$symbol
+    results$gene_biotype <- annot$gene_biotype
+    results$seq_name <- annot$seq_name
+    results$gene_seq_start <- annot$gene_seq_start
+    results$gene_seq_end <- annot$gene_seq_end
+    
+  } else {
+    
+    keys <- keys(db, c("TXID"))
+    annotations <- AnnotationDbi::select(db, keys, c("GENEID", "TXNAME", "SYMBOL", "GENENAME","GENEBIOTYPE","TXBIOTYPE", "SEQNAME", "TXSEQSTART","TXSEQEND","EXONID","EXONSEQSTART", "EXONSEQEND"), "TXID")
+    
+    annot <- annotations %>%
+      dplyr::select("GENEID", "TXID", "TXNAME", "SYMBOL", "GENENAME","GENEBIOTYPE","TXBIOTYPE", "SEQNAME", "TXSEQSTART","TXSEQEND","EXONID","EXONSEQSTART", "EXONSEQEND") %>%
+      dplyr::filter(TXID %in% rownames(results)) ## genes.results
+    
+    ## Order results to match them
+    order <- match(rownames(results), annot$TXID) ## genes.results
+    annot <- annot[order,]
+    
+    ## Annotations
+    results$gene_id <- annot$GENEID
+    results$transcript <- annot$TXID
+    results$symbol <- annot$GENENAME
+    results$gene_biotype <- annot$GENEBIOTYPE
+    results$tx_biotype <- annot$TXBIOTYPE
+    results$seq_name <- annot$SEQNAME
+    results$tx_seq_start <- annot$TXSEQSTART
+    results$tx_seq_end <- annot$TXSEQEND
+    results$exon_id <- annot$EXONID
+    results$exon_seq_start <- annot$EXONSEQSTART
+    results$exon_seq_end <- annot$EXONSEQEND
+    
+  }
+  
+  results$padj <- ifelse(is.na(results$padj), 1, results$padj) ## NA filtering, padj
+  results$pvalue <- ifelse(is.na(results$pvalue), 1, results$pvalue) ## NA filtering, pv
+  results <- na.omit(results)
+  
+  ## Order results and save Files as CSV function
+  results <- results[order(results$padj),]
+  results$Count <-rep(1, nrow(results))
+  
+  write.csv(as.data.frame(results), file=file.path(root,dir.res,paste0(filename, ".csv")))
+  
+  return(results)
+  
+}
+
+## This function is for annotating by genomic features like promoters, exons, etc
+## mapping geneIDs blog: https://medium.com/computational-biology/gene-id-mapping-using-r-14ff50eec9ba
+
+## A function for annotating genes with additional information
+annotate.peak <- function(peaks.file){
+  
+  require(ChIPseeker)
+  require(TxDb.Hsapiens.UCSC.hg38.refGene)
+  require(plyranges)
+  
+  res <- as.data.frame(peaks.file)
+  res.gr<- res %>% 
+    #transform( seqnames= paste0("chr",res$seq_name), start = res$gene_seq_start, end = res$gene_seq_end)  %>% 
+    transform( seqnames= paste0("chr",res$seq_name), start = res$tx_seq_start, end = res$tx_seq_end)  %>% 
+    as_granges()
+  
+  
+  ## Prepare annotation objects for mapping
+  txdb <- TxDb.Hsapiens.UCSC.hg38.refGene ## Refgene and knowngene dbs have signficant differences
+  ## see: https://vatlab.github.io/vat-docs/applications/annotation/genes/refgene/
+  
+  ## Call annotation
+  anno <- annotatePeak( res.gr, TxDb = txdb , tssRegion=c(-3000, 3000))
+  plotAnnoPie(anno)
+  anno <- data.frame(anno@anno)
+  
+  return(anno)
+  
+}
+
+## A function that calls on a function from ggpubr to generate an MA plot from DESeq results object
+plot_MA <- function(coef, title, results, dncol="#D46780", upcol="#798234"){
+  
+  require("apeglm")
+  require("ggpubr")
+  
+  # shrink noisy log2 fold change estimates for coefficients: DESeq2 function
+  res <- lfcShrink(dds, coef=coef, type="apeglm")
+  res <- res[rownames(res)%in% rownames(results),]
+  
+  g1<-ggmaplot(res, 
+               main = title,
+               fdr = 0.10, fc = 1, size = 2,
+               palette = c(upcol, dncol, "darkgray"),
+               legend = "top", top = 0,
+               alpha=0.8,
+               xlab = "Log2 mean expression",
+               ylab = "Log2 fold change",
+               font.legend = c(16, "black", "Arial"),
+               font.main = c(16,"black", "Arial"),
+               ggtheme = theme_classic()
+  ) + theme(text = element_text(size = 16, color= "black", family = "Arial"))
+  
+  return(g1)
+  
+}
+
+## Function to generate volcano plot
+DE_Vol_Plot <- function(results, plt.title, lfc.up=0.58, lfc.dwn=-0.58,pvadj=0.05,
+                        y.limits, x.limits=c(-7,7),dncol="#D46780", upcol="#798234") {
+  require(ggrepel)
+  require(ggplot2)
+  
+  ## Generate data frame
+  genes.rna <- data.frame(symbol = results$symbol,lfc = results$log2FoldChange, padj=results$padj, base=results$baseMean)
+  
+  resultsDN <- as.data.frame(genes.rna[which(genes.rna$lfc < lfc.dwn),])
+  resultsDN <- as.data.frame(resultsDN[which(resultsDN$padj < pvadj),])
+  length(rownames(resultsDN)) ## Gives count of down regulated
+  
+  resultsUP <- as.data.frame(genes.rna[which(genes.rna$lfc > lfc.up),])
+  resultsUP <- as.data.frame(resultsUP[which(resultsUP$padj < pvadj),])
+  length(rownames(resultsUP)) ## Gives count of up regulated  
+  
+  ## add a column of NAs
+  genes.rna$diffexpressed <- "NO"
+  ## If log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
+  genes.rna$diffexpressed[genes.rna$lfc > lfc.up & genes.rna$padj < pvadj] <- "Upregulated"
+  ## If log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
+  genes.rna$diffexpressed[genes.rna$lfc < lfc.dwn & genes.rna$padj < pvadj] <- "Downregulated"
+  
+  ## Create a new column "delabel" to de, that will contain the name of genes differentially expressed (NA in case they are not)
+  genes.rna$delabel <- NA
+  genes.rna$delabel[genes.rna$diffexpressed != "NO"] <- genes.rna$symbol[genes.rna$diffexpressed != "NO"]
+  
+  ## Jitter labeling
+  pos <- position_jitter(width = 0.2, seed = 1)
+  
+  vplot <- genes.rna %>% mutate(mean.intensity = base/max(base)) %>% 
+    ggplot(aes(x=lfc, y=-log10(padj), col=diffexpressed, size = mean.intensity #, label=delabel
+    )) +
+    geom_point(position = pos, alpha=0.7)+ theme_classic()+
+    scale_color_manual(name="Upregulated", values=c(dncol, "lightgrey", upcol))+
+    geom_vline(xintercept=c(lfc.dwn, lfc.up), col="red", lty = "dashed") +
+    geom_hline(yintercept=-log10(pvadj), col="red", lty = "dashed")+ 
+    #geom_text_repel(segment.color = 'transparent', position = pos, size = 3, xlim  = c(-6,6)) +
+    labs(title=plt.title, subtitle=paste(paste("Downregulated:",length(rownames(resultsDN))), paste("| Upregulated:",length(rownames(resultsUP))))) +
+    scale_y_continuous(name="-Log 10 Padj", limits=c(0,y.limits), breaks=seq(0,y.limits, by =50))+
+    scale_x_continuous(name="Log 2 Fold Change", limits=x.limits, breaks=c(-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7))+
+    theme( legend.position="none",plot.title = element_text(size=16), text = element_text(size=16, family="Arial"), axis.text.x = element_text(angle = 0)) 
+  
+  return(vplot)
+  
+}
+
+## Function to plot LFC vs LFC for gene data. Plot = data to plot
+plotLFC <- function(plot, x.lab, y.lab){
+  
+  require(viridis)
+  require(ggpubr)
+  require(ggplot2)
+  require(ggside)
+  
+  plot$cond <- NA
+  ## Split data up into quarter
+  plot$cond[plot$log2FoldChange.x >0 & plot$log2FoldChange.y < 0] <- "Q4"
+  plot$cond[plot$log2FoldChange.x >0 & plot$log2FoldChange.y > 0] <- "Q3"
+  plot$cond[plot$log2FoldChange.x < 0 & plot$log2FoldChange.y > 0] <- "Q2"
+  plot$cond[plot$log2FoldChange.x < 0 & plot$log2FoldChange.y < 0] <- "Q1"
+  
+  pos <- position_jitter(width = 0.2, seed = 1)  
+  lm <- lm(log2FoldChange.y ~ log2FoldChange.x, plot) ## Get regression line
+  coeff<-coefficients(lm)           
+  intercept<-coeff[1] 
+  slope<- coeff[2] 
+  
+  # Bin size control + color palette
+  p <- ggplot(plot, aes(x=log2FoldChange.x, y=log2FoldChange.y) ) +
+    geom_hex(bins = 100) +scale_y_continuous(limits = c(-10,10))+scale_x_continuous(limits = c(-10,10))+ 
+    scale_fill_viridis( option = "B")+geom_vline(xintercept=0, col="darkred", lty = "dashed") +
+    theme(plot.title = element_text(size=16), text = element_text(size=16, family="Arial"), axis.text.x = element_text(angle = 0)) +
+    geom_hline(yintercept=0, col="darkred", lty = "dashed") + theme_classic()+
+    xlab(x.lab)+ ylab(y.lab) +
+    geom_abline(intercept = 0, slope = 1, col = "darkred", linetype="dashed", size=0.5 )
+  p + geom_xsidedensity(aes(y=after_stat(density), alpha=0.9, xfill = diffexpressed.x), position = "dodge") +
+    geom_ysidedensity(aes(x=after_stat(density), alpha=0.9, yfill = diffexpressed.y), position = "dodge")+
+    scale_xfill_manual(values =  c("#000004","#781c6d", "#ed6925")) +
+    scale_yfill_manual(values =  c("#000004","#781c6d", "#ed6925")) + theme(ggside.panel.scale = .2)+
+    scale_xsidey_continuous() + scale_ysidex_continuous() 
+  
+  print(p)
+  
+}
+
+```
+
+#### Set Directory, pass in  counts, filter counts for DGE analysis  
+
+In the initial step, the counts are passed in as raw [RSEM](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/1471-2105-12-323) counts using the [Tximport package](https://bioconductor.org/packages/release/bioc/html/tximport.html), 0 counts are replaced with 1, and the conditions for the experiment are factored out in preparation for DGE analysis using DESeq2.  
+
+```{r, message=FALSE, warning=FALSE}
+
+list.files(file.path(root,dir.rsem))
+
+## Get sample metadata
+sample <- read.table(file.path(root,dir.rsem, "metadata.csv"), sep= ",", header= TRUE)
+newcolnames <-sample$Alias
+sample
+
+## Import files
+files <- file.path(root,dir.rsem, paste0(sample$ID))
+files
+
+## Imports RSEM TPM files into a list genes.results
+cts <- tximport(files, type = "rsem", txIn = FALSE, txOut = FALSE)
+
+## Move col names from sample info to counts matrix
+colnames(cts$counts)<-newcolnames
+
+#Replace any transcripts with length 0 with a 1
+cts$length[cts$length == 0] <- 1
+head(cts$counts)
+
+# logical test to see if ^ is true now
+identical(sample$Alias, colnames(cts$counts))
+
+# Store the file names in the sample info matrix as row names
+row.names(sample) <- sample$Alias
+head(sample, n=10)
+
+#factor out dependencies
+sample$Conditions <- factor(sample$Conditions, levels = c("CTRL_0hrs","ActD_6hrs","Pol1_6hrs","Pol2_6hrs"))
+sample<- mutate(sample, Conditions = fct_relevel(Conditions, c( "CTRL_0hrs","ActD_6hrs","Pol1_6hrs","Pol2_6hrs")))
+sample$Label <- factor(sample$Label, levels = dput(as.character(unique(sample$Label))))
+
+
+```
+
+
+#### Create DESeq data object and apply transformations to data for pre-DGE QC  
+
+We genereate a DESeq object here using the imported transcripts from Tximport, collapse the lanes into single replicates, and the counts are filtered to remove low counts.  
+
+```{r, message=FALSE, warning=FALSE}
+
+## Create DDS object using RSEM counts
+dds <- DESeqDataSetFromTximport(cts, colData = sample, design = ~ Conditions)
+
+## check dds object
+summary(dds)
+
+## Pre-filtering the dataset
+nrow(dds)
+dds <- dds[ rowSums(counts(dds)) > 0, ]
+nrow(dds)
+
+```
+
+#### Apply transformations to data for pre-DGE QC
+
+Here, we find size factors to normalize differences in sequencing depth across samples in addition to applying three variance stabilizing transformations to the data to remove the dependence of the data on the mean.These transformations are optional 
+
+__[VST](https://rdrr.io/bioc/DESeq2/man/varianceStabilizingTransformation.html): normalizes using size factors that fit the data__  
+__[RLOG](https://rdrr.io/bioc/DESeq2/man/rlog.html): applies a log transformation to reduce the skew and variance of the data__  
+__[normTransform](https://www.rdocumentation.org/packages/DESeq2/versions/1.12.3/topics/normTransform): is an optional function for applying different transformation functions + a psuedocount if needed__  
+
+```{r, message=FALSE, warning=FALSE}
+
+## Variance stabilizing transformation (VST) | regularized log transformation | and normalized counts transformation to make data more homoskedastic
+vst <- vst(dds, blind = FALSE)
+rld <- rlog(dds, blind = FALSE)
+ntd <-normTransform(dds, f=log2, pc=1)
+
+## Add another column which defines the group that each sample is in
+dds$group <- factor(paste0(dds$Conditions))
+
+## Find size factors to normalize differences in sequencing depth across samples
+dds <- estimateSizeFactors(dds)
+
+```
+
+#### Base R PCA Plots
+
+This snippet uses base R functions and GGPlot2 to generate four plots of all of the *unnormalized* (raw) count data: 
+
+__Plot 1:__ a PCA plot of PC1 & PC2  
+__Plot 2:__ a PCA plot of PC2 & PC3  
+__Plot 3:__ a plot of the cumulative variance  
+__Plot 4:__ a plot of the eigenvalues for each PC  
+
+finally, we retur which PCs are most important to consider in downstream analysis. 
+
+The eigenvalues are proportional to the square of the ‘standard deviation’ output of prcomp. The “Kaiser-Guttman” criterion for retaining principal components states that you only keep the ones whose eigenvalues are greater than the average eigenvalue. PCA plots are generated for PCs 1 v 2, and 2 v 3.  
+
+```{r, message=FALSE, warning=FALSE}
+
+## Count table for PCA
+cts.norm <- as.matrix(round(counts(dds)))
+head(cts.norm)
+
+scaled = DESeq2::rlog(cts.norm, blind = TRUE)
+
+## Next we calculate the per-row variance in the transformed table.
+vars = rowVars(scaled)
+
+## Then we re-order the rows so that the most variable rows are on top.
+scaled = scaled[order(vars, decreasing = TRUE),]
+
+## ## Here we perform PCA using `prcomp`. We transpose (`t`) the matrix and only operate on the entire data set
+pca = prcomp(t(scaled))
+
+## We calculate the percent variance explained by each principal component by extracting these values from the summary.
+percentVar = round(100 * summary(pca)$importance[2,])
+cumuVar = round(100 * summary(pca)$importance[3,])
+
+## Look at top variance
+head(pca$x, n=12)
+
+prTab = data.frame(pca$x, colData(dds)) ## All conditions
+
+prTab %>% #PCA1_2_AllSamples_withlabels ## pca.pol1only ## pca.pol1only.nolabels ## pca.1.2.nopol2 ## pca.1.2.nopol2.nolabels
+  ggplot(aes(PC1, PC2, color = Conditions)) +
+  geom_point(size = 8, alpha = 1) + theme_classic()+
+  xlab(paste0("PC1: ", percentVar[1], "% variance")) + ylab(paste0("PC2: ", percentVar[2], "% variance")) + 
+  scale_color_manual(values = c("black", "darkblue","slateblue", "steelblue3")) +
+  coord_fixed() + geom_text_repel(segment.color = 'transparent', aes(label = NA), size = 3, family = "Arial Narrow", hjust = 0)+
+  theme(legend.position="bottom", plot.title = element_text(size=20), text = element_text(size=20, family="Arial"))
+
+## Plot top PCAs for PCA2 and 3 
+prTab %>% #PCA2_3_AllSamples_NOlabels ## pca.2.3.pol1only ## pca.2.3.pol1only.nolabels ## pca.2.3.nopol2 ## pca.2.3.nopol2.nolabels
+  ggplot(aes(PC2, PC3, color = Conditions)) +
+  geom_point(size = 5, alpha = 1) + theme_classic()+
+  xlab(paste0("PC2: ", percentVar[2], "% variance")) + ylab(paste0("PC3: ", percentVar[3], "% variance")) + 
+  scale_color_manual(values = c("black", "darkblue","slateblue", "steelblue3")) +
+  coord_fixed() + geom_text_repel(aes(label = NA), size = 3, family = "Arial Narrow", hjust = 0)+
+  theme(legend.position="bottom", plot.title = element_text(size=20), text = element_text(size=20, family="Arial"))
+  
+## Plot cumulative variance
+b = barplot(percentVar, horiz = FALSE, las = 1, ylab = 'Variance (%)', ylim = c(0,105))
+lines(b, cumuVar, type = 'b', col = 'red')
+
+## Plot Eigens
+eigenvalues = pca$sdev^2
+plot(c(1:12), eigenvalues, xlab = 'Principal Components', ylab = 'eigenvalue', las = 1)
+
+## determing which PCAs to keep based on: 
+which(eigenvalues > mean(eigenvalues))
+```
+
+#### Figure 3H: Heatmap for QC of count data  
+
+This snippet uses [Pheatmap](https://www.rdocumentation.org/packages/pheatmap/versions/1.0.12/topics/pheatmap), [Dendsort](https://cran.rstudio.com/web/packages/dendsort/index.html), and the Pearson Correlation coefficients of the experiment samples to generate a clustered heatmap with a dendrogram for experiment conditions. The input for this is the dds object generated from calling DESeq.  
+
+```{r, message=FALSE, warning=FALSE}
+
+## Hierachal clustering map plot for sample QC
+sort_hclust <- function(...) as.hclust(dendsort(as.dendrogram(...)))
+
+## Extract the rlog matrix from the object
+rld_mat <- assay(rld) ## All samples 
+
+## Compute pairwise correlation values
+rld_cor <- cor(rld_mat) 
+
+colnames(rld_cor) <- c("ActD R1", "ActD R2", "ActD R3", "Pol1 R1", "Pol1 R2", "Pol1 R3", "Pol2 R1", "Pol2 R2", "Pol2 R3", "ctrl R1", "ctrl R2", "ctrl R3")
+rownames(rld_cor) <- c("ActD R1", "ActD R2", "ActD R3", "Pol1 R1", "Pol1 R2", "Pol1 R3", "Pol2 R1", "Pol2 R2", "Pol2 R3", "ctrl R1", "ctrl R2", "ctrl R3")
+
+## organize hierachal clusters
+mat <- rld_cor
+mat_cluster_cols <- hclust(dist(t(mat)))
+mat_cluster_cols <- sort_hclust(mat_cluster_cols)
+mat_cluster_rows <- sort_hclust(hclust(dist(mat)))
+length(mat)
+
+## Color scales
+colors <- colorRampPalette(c("#798234","white","#D46780"))(length(mat))
+
+# plot heat map ## sample.corr.plot.nopol2 ## sample.corr.plot.pol1only
+p<-pheatmap(mat, 
+            color = colors,
+            fontsize = 16,
+            fontsize_row = 16, 
+            fontsize_col = 16,
+            cellwidth = 20,
+            cellheight = 20,
+            cluster_cols= mat_cluster_cols,
+            cluster_rows= mat_cluster_rows,
+            main = "",
+            annotation_legend = TRUE,
+            scale="row")
+p
+
+```
+
+#### Differential expression analysis and 'results' matrices  
+
+In this section we generate the differential gene expression results using the conditions and factors defined in an earlier step. After running [DESeq()](https://bioconductor.org/packages/release/bioc/html/DESeq2.html), we generate results matrices for each contrast in the experiment.  
+
+```{r, message=FALSE, warning=FALSE}
+
+## Generate DGE DESeqDataSet data frame
+dds <- DESeq(dds)
+
+## Which contrasts to use?
+resultsNames(dds)
+
+## Generate a results matrix for Treatment vs. Control with an alpha of 0.05
+res.actd <- results(dds, contrast = c("Conditions","ActD_6hrs", "CTRL_0hrs"), alpha = 0.05)
+res.pol1 <- results(dds, contrast = c("Conditions", "Pol1_6hrs", "CTRL_0hrs"), alpha = 0.05)
+res.pol2 <- results(dds, contrast = c("Conditions", "Pol2_6hrs", "CTRL_0hrs"), alpha = 0.05)
+
+
+```
+
+#### Annotating the results using [Annotation Hub](https://bioconductor.org/packages/release/bioc/html/AnnotationHub.html)  
+
+Annotate_results() first uses [Annotation Hub](https://bioconductor.org/packages/release/bioc/html/AnnotationHub.html) to map ENSEMBL IDs to NCBI Gene Symbols. It then replaces NAs in the dataset with (generated by DESeq2's outlier identification algorithm using Cook's Distance) with psuedocounts of 1, as well as filtering out NAs for unmapped ENSEMBL IDs. Finally, it orders the results and writes them to a CSV in the results directory .  
+
+__Arguments:__  
+
+_results = the DESeq2 results object generated from DESeq::results()_  
+_filename = a string that the CSV will be saves as_  
+_transcript = boolean: RSEM transcripts? TRUE, RSEM genes? FALSE_  
+
+__Output:__ _annotated results matrix_  
+
+```{r, message=FALSE, warning=FALSE}
+## Annotate genes ## When using gene RSEM counts
+res.actd <- Annotate_results(res.actd, "Conditions_ActD_6hrs_vs_CTRL_0hrs.genes", transcript=F)
+res.pol1 <- Annotate_results(res.pol1, "Conditions_Pol1_6hrs_vs_CTRL_0hrs.genes", transcript=F)
+res.pol2 <- Annotate_results(res.pol2, "Conditions_Pol2_6hrs_vs_CTRL_0hrs.genes", transcript=F)
+
+```
+
+#### Figure 3G: Build scatter plots of log fold change and counts 
+
+Here, we plot the log fold change of each condition against one of the others
+
+```{r, message=FALSE, warning=FALSE}
+
+## Annotate for Up/downregulated
+res.pol1.filtered <- Filter_Results(res.pol1)
+res.pol2.filtered <- Filter_Results(res.pol2)
+res.actd.filtered <- Filter_Results(res.actd)
+
+##-------------------------------------------------------## For genes
+
+pol1.df <- dplyr::select(res.pol1.filtered, baseMean, gene_id, log2FoldChange, padj, gene_biotype, diffexpressed)
+pol2.df <- dplyr::select(res.pol2.filtered, baseMean, gene_id, log2FoldChange, padj, gene_biotype, diffexpressed)
+actd.df <- dplyr::select(res.actd.filtered, baseMean, gene_id, log2FoldChange, padj, gene_biotype, diffexpressed)
+
+## filter counts on DEG data
+plot.1 <- merge(pol1.df, pol2.df, by = "gene_id")
+plot.2 <- merge(pol1.df, actd.df, by = "gene_id")
+plot.3 <- merge(pol2.df, actd.df, by = "gene_id")
+
+## Plot each pair of LFC scatterplots
+plotLFC(plot.1, x.lab = "Pol 1 LFC", y.lab = "Pol 2 LFC")
+plotLFC(plot.2, x.lab = "Pol 1 LFC", y.lab = "ActD LFC")
+plotLFC(plot.3, x.lab = "Pol 2 LFC", y.lab = "ActD LFC")
+
+```
+
+#### SI Figure 4A-C: MA Plot  
+
+Thisfunction, plot_MA(), uses base R, ggplot2, and [apeglm](https://bioconductor.org/packages/release/bioc/html/apeglm.html) to generate an [MA plot](https://en.wikipedia.org/wiki/MA_plot) of the DGE results that show the mean count for each gene agains the log fold change of each gene.  
+
+__Arguments__  
+
+_coef = the coefficient generated upon calling DEseq::resultsNames(dds)_
+_title =  plot title (string)_  
+_results = the DESeq2 results object generated from DESeq::results()_  
+_dn.col = color of downregulated genes_  
+_up.col = color of upregulated genes_  
+
+__Output:__ _MA plot_  
+
+```{r, message=FALSE, warning=FALSE}
+
+## Find coefficients for following function
+resultsNames(dds)
+
+### Call function for results
+plot_MA("Conditions_ActD_6hrs_vs_CTRL_0hrs", "Act D", res.actd) ## ma.plot.actd
+plot_MA("Conditions_Pol1_6hrs_vs_CTRL_0hrs", "Pol 1", res.pol1) ## ma.plot.pol1
+plot_MA("Conditions_Pol2_6hrs_vs_CTRL_0hrs", "Pol 2", res.pol2)
+
+```
+
+
+#### Base R Volacano plot of DESeq results  
+
+This function uses base R to generate a volcano plot of differentialy expressed genes using the log fold change and p value cut-offs supplied in the arguments. Before returning the plot, it saves a copy of the plot to the designated directory.  
+  
+  DE_Vol_Plot <- function(results, plt.title, lfc.up=0.58, lfc.dwn=-0.58,pvadj=0.05,
+                        y.limits, x.limits=c(-7,7),dncol="#D46780", upcol="#798234") {
+__Arguments__  
+  
+_results = the DESeq2 results object generated from DESeq::results()_  
+_plt.title =  plot title (string)_  
+_lfc.up = upregulated log fold change cut-off (numeric)_  
+_lfc.dn = downregulated log fold change cut-off (numeric)_  
+_padj = Pvalue adjusted cutoff_  
+_y.limits = the y axis limit of the plot_  
+_x.limits = the x axis limit of the plot_  
+_dncol = color for downregulated genes_  
+_upcol = color for upregulated genes_  
+  
+__Output:__ _Volcano plot_  
+  
+lfc.up = positive integer (ex. 0.58, 1, 2)  
+lfc.dwm = negative integer (ex. -0.58, -1, -2)  
+pvadj = positive integer (ex. 0.01, 0.05. 0.1)  
+  
+_To turn on labeling of individual DEGs, 'label=delabel' and 'geom_text_repel' need to be uncommented._  
+
+```{r, eval = FALSE}
+
+### Call function for results
+DE_Vol_Plot(res.actd,"ActD: Differentially Expressed Genes", y.limits=300) ## volplot.actd
+DE_Vol_Plot(res.pol1,"Pol1: Differentially Expressed Genes", y.limits=300) ## volplot.pol1
+DE_Vol_Plot(res.pol2,"Pol2: Differentially Expressed Genes",y.limits=300) ## volplot.pol2
+
+
+```
+
+#### Figures 3D-F: Get counts of transcript biotype for each condition
+
+```{r, message=FALSE, warning=FALSE}
+
+
+## Get sample metadata
+sample <- read.table(file.path(root,dir.rsem, "metadata.csv"), sep= ",", header= TRUE)
+newcolnames <-sample$Alias
+sample
+
+files <- file.path(root,dir.rsem.txi, paste0(str_replace_all(sample$ID, "genes", "isoforms")))
+
+cts<- tximport(files, type = "rsem", txIn = TRUE, txOut = TRUE)
+
+## Move col names from sample info to counts matrix
+colnames(cts$counts)<-newcolnames
+
+#Replace any transcripts with length 0 with a 1
+cts$length[cts$length == 0] <- 1
+
+# logical test to see if ^ is true now
+identical(sample$Alias, colnames(cts$counts))
+
+# Store the file names in the sample info matrix as row names
+row.names(sample) <- sample$Alias
+head(sample, n=10)
+
+#factor out dependencies
+sample$Conditions <- factor(sample$Conditions, levels = c("CTRL_0hrs","ActD_6hrs","Pol1_6hrs","Pol2_6hrs"))
+sample<- mutate(sample, Conditions = fct_relevel(Conditions, c( "CTRL_0hrs","ActD_6hrs","Pol1_6hrs","Pol2_6hrs")))
+sample$Label <- factor(sample$Label, levels = dput(as.character(unique(sample$Label))))
+
+## Create DDS object using RSEM counts
+dds <- DESeqDataSetFromTximport(cts, colData = sample, design = ~ Conditions)
+
+## Pre-filtering the dataset
+nrow(dds)
+dds <- dds[ rowSums(counts(dds)) > 0, ]
+nrow(dds)
+
+
+## Generate DGE DESeqDataSet data frame
+dds <- DESeq(dds)
+
+## Generate a results matrix for Treatment vs. Control with an alpha of 0.05
+res.actd <- results(dds, contrast = c("Conditions","ActD_6hrs", "CTRL_0hrs"), alpha = 0.05)
+res.pol1 <- results(dds, contrast = c("Conditions", "Pol1_6hrs", "CTRL_0hrs"), alpha = 0.05)
+res.pol2 <- results(dds, contrast = c("Conditions", "Pol2_6hrs", "CTRL_0hrs"), alpha = 0.05)
+
+## Annotate transcripts ## When using transcript RSEM counts
+res.actd <- Annotate_results(res.actd, "Conditions_ActD_6hrs_vs_CTRL_0hrs.tx", transcript=T)
+res.pol1 <- Annotate_results(res.pol1, "Conditions_Pol1_6hrs_vs_CTRL_0hrs.tx", transcript=T)
+res.pol2 <- Annotate_results(res.pol2, "Conditions_Pol2_6hrs_vs_CTRL_0hrs.tx", transcript=T)
+
+##-------------------------------------------------------## transcript Annotation with further info
+
+## Annotate for Up/downregulated
+res.pol1.filtered <- Filter_Results(res.pol1)
+res.pol2.filtered <- Filter_Results(res.pol2)
+res.actd.filtered <- Filter_Results(res.actd)
+
+pol1.anno <- annotate.peak(res.pol1.filtered)
+pol2.anno <- annotate.peak(res.pol1.filtered)
+actd.anno <- annotate.peak(res.actd.filtered)
+
+##-------------------------------------------------------## Plot Figures 3D-F
+
+## get table of number of DEGs up and down
+feat_tbl.1 <-res.pol1.filtered  %>% group_by(tx_biotype) %>% 
+  reframe(down = as.numeric(-sum(down)), up = as.numeric(sum(up))) 
+  
+feat_tbl.2 <- res.actd.filtered  %>% group_by(tx_biotype) %>% 
+  reframe(down = as.numeric(-sum(down)), up = as.numeric(sum(up))) 
+
+feat_tbl.3 <- res.pol2.filtered  %>% group_by(tx_biotype) %>% 
+  reframe(down = as.numeric(-sum(down)), up = as.numeric(sum(up))) 
+
+## clean up data for plotting
+feat_tbl.1$name <- rep("Pol 1", nrow(feat_tbl.1))
+feat_tbl.2$name <- rep("ActD", nrow(feat_tbl.2))
+feat_tbl.3$name <- rep("Pol 2", nrow(feat_tbl.3))
+
+## Gather Pol 1 data for plotting
+tbl <- gather(feat_tbl.1, diff, sum, 2:3)
+tbl <- tbl[tbl$sum != 0,]
+tbl <- tbl[abs(tbl$sum) > 25,]
+
+## # deg.summary.pol1 ## deg.tx.summary.pol1
+tbl %>% 
+  ggplot(aes(x=reorder(tx_biotype, -abs(sum)), y=as.numeric(sum) , fill=diff, color = "black"), group_by(tx_biotype)) +
+  scale_y_continuous(breaks = c(seq(min(as.numeric(tbl$sum)), 0, by =1000), seq(0, max(as.numeric(tbl$sum)),by =1000))  ,limits=c(min(as.numeric(tbl$sum)), max(as.numeric(tbl$sum)))) + 
+  geom_bar(stat="identity", width=0.75, position = "stack", alpha = 1) +
+  scale_color_manual(values=c("black","black"))+
+  scale_fill_manual(values=c("#D46780","#798234")) + theme_classic()+
+  scale_x_discrete(expand = c(0.09, 0.09))+
+  theme(axis.text.x = element_text(angle = 45,  hjust=1), legend.position="", plot.title = element_text(size=16), text = element_text(size=16, family="Arial"))+
+  guides(fill = guide_legend(title = "Transcript Type"))+ ylab("Number of DEGs") + xlab("")+ ggtitle(paste0("Pol 1"))
+
+## Gather Pol 2 data for plotting
+tbl <- gather(feat_tbl.2, diff, sum, 2:3)
+tbl <- tbl[tbl$sum != 0,]
+tbl <- tbl[abs(tbl$sum) > 25,]
+
+## # deg.summary.pol2 ## deg.tx.summary.pol2
+tbl %>% 
+  ggplot(aes(x=reorder(tx_biotype, -abs(sum)), y=as.numeric(sum) , fill=diff, color = "black"), group_by(tx_biotype)) +
+  scale_y_continuous(breaks = c(seq(min(as.numeric(tbl$sum)), 0, by =1000), seq(0, max(as.numeric(tbl$sum)),by =1000))  ,limits=c(min(as.numeric(tbl$sum)), max(as.numeric(tbl$sum)))) + 
+  geom_bar(stat="identity", width=0.75, position = "stack", alpha = 1) +
+  scale_color_manual(values=c("black","black"))+
+  scale_fill_manual(values=c("#D46780","#798234")) + theme_classic()+
+  scale_x_discrete(expand = c(0.09, 0.09))+
+  theme(axis.text.x = element_text(angle = 45,  hjust=1), legend.position="", plot.title = element_text(size=16), text = element_text(size=16, family="Arial"))+
+  guides(fill = guide_legend(title = "Transcript Type"))+ ylab("Number of DEGs") + xlab("")+ ggtitle(paste0("Pol 2"))
+
+## Gather ActD data for plotting
+tbl <- gather(feat_tbl.3, diff, sum, 2:3)
+tbl <- tbl[tbl$sum != 0,]
+tbl <- tbl[abs(tbl$sum) > 25,]
+
+## # deg.summary.actd ## deg.tx.summary.actd
+tbl %>% 
+  ggplot(aes(x=reorder(tx_biotype, -abs(sum)), y=as.numeric(sum) , fill=diff, color = "black"), group_by(tx_biotype)) +
+  scale_y_continuous(breaks = c(seq(min(as.numeric(tbl$sum)), 0, by =1000), seq(0, max(as.numeric(tbl$sum)),by =1000))  ,limits=c(min(as.numeric(tbl$sum)), max(as.numeric(tbl$sum)))) + 
+  geom_bar(stat="identity", width=0.75, position = "stack", alpha = 1) +
+  scale_color_manual(values=c("black","black"))+
+  scale_fill_manual(values=c("#D46780","#798234")) + theme_classic()+
+  scale_x_discrete(expand = c(0.09, 0.09))+
+  theme(axis.text.x = element_text(angle = 45,  hjust=1), legend.position="", plot.title = element_text(size=16), text = element_text(size=16, family="Arial"))+
+  guides(fill = guide_legend(title = "Transcript Type"))+ ylab("Number of DEGs") + xlab("")+ ggtitle(paste0("ActD"))
+
+utils::sessionInfo()
+```

@@ -593,5 +593,6 @@ assoc %>%
   ggtitle("") + xlab("Cell") + ylab("RNAPI K9 Association") +scale_y_continuous(labels = scales::percent) +
   geom_text(aes(y=label_ypos, label= paste0(round(value*100, 2),"%")), vjust=1.6, color="white", size=3.5)
 
+utils::sessionInfo()
 ```
 
