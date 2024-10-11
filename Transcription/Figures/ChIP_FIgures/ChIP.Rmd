@@ -1,9 +1,30 @@
+---
+title: "ChIP Reanalysis"
+author: "Lucas Carter"
+date: "2024-10-11"
+output: github_document
+---
 
-#####################################################################################
-# Remapped ChIP peaks import and processing                               
-#####################################################################################
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## These were remapped to most recent mouse assembly with rDNA included
+## ChIP Reanalysis for Figure Panel 6
+
+This file contains the code necessary for generating the ChIP plots in Figure Panel 6 that use intron coverage data from total RNAseq generated for **"Extra-nucleolar Pol I regulates gene transcription through chromatin domain maintenance"**. Publicly available [ChIP data](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE145874) were taken from [Genome-wide analyses of chromatin interactions after the loss of Pol I, Pol II, and Pol III](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-02067-3#availability-of-data-and-materials). Mouse ESC NAD tracks were taken from [Genome-wide maps of nucleolus interactions reveal distinct layers of repressive chromatin domains](https://pubmed.ncbi.nlm.nih.gov/35304483/).  
+
+#### Load initial packages here  
+
+Loads initial packages and set root directory where dryad repository is stored
+
+```{r, message=FALSE, warning=FALSE}
+
+## Set your root directory here
+root<- "/Volumes/external hd/IBiS/Backman_Lab/Transcription Publication/repositories/dryad/"
+
+## gene position directory
+bed.dir <- "/ChIP/peaks/"
+
 require("rtracklayer")
 require("ggplot2")
 require("GenomicRanges")
@@ -22,14 +43,12 @@ require("forcats")
 chroms <- c("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", 
             "chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chrX", "chrM", "chrR")
 
+```
+
+#### Prepare data for plotting
+
+```{r, message=FALSE, warning=FALSE}
 ##------------------------------Bedtools intersected replicates------------------------------##
-## This section is *only* for the replicates that were intersected using Bedtools
-
-## Set your root directory here
-root<- "/Volumes/external hd/IBiS/Backman_Lab/Transcription Publication/repositories/dryad/"
-
-## gene position directory
-bed.dir <- "/ChIP/peaks/"
 
 pol1.bed <- read.table(file.path(root,bed.dir,"pol1.bedtools.union.bed"), sep= "\t", header= TRUE)
 pol2.bed <- read.table(file.path(root,bed.dir,"pol2.bedtools.union.bed"), sep= "\t", header= TRUE)
@@ -98,7 +117,7 @@ binGenome <- function(chrom.file="mm39.chrom.sizes.csv", bin.size,
   for (i in 1:length(chrom.sizes$name)){
     
     chrom <- chrom.sizes$name[i]
-    print(chrom)
+
     
     if((chrom == "chrR" & bin.size > 15000 ) | ( chrom == "chrM" & bin.size > 15000)){
       
@@ -108,7 +127,7 @@ binGenome <- function(chrom.file="mm39.chrom.sizes.csv", bin.size,
       name <- rep(chrom, length(x))
       
       df <- data.frame(name, x, y)
-      print(df)
+
       
     } else {
       
@@ -120,7 +139,7 @@ binGenome <- function(chrom.file="mm39.chrom.sizes.csv", bin.size,
       name <- rep(chrom, length(x))
       
       df <- data.frame(name, x, y)
-      print(df)
+
       
     }
     
@@ -139,6 +158,12 @@ binGenome <- function(chrom.file="mm39.chrom.sizes.csv", bin.size,
 
 mm39.tbl <- binGenome("mm39.chrom.sizes.csv", 10000)
 mm39.tbl
+
+```
+
+#### Figure 6F: Spearman correlation
+
+```{r, message=FALSE, warning=FALSE}
 
 #####################################################################################
 # compositional analysis of NADs and rDNA # to be continued                         
@@ -185,8 +210,8 @@ p<-pheatmap(M,
             fontsize_row = 16, 
             fontsize_col = 16,
             fontsize_number = 12,
-            cellwidth = 100,
-            cellheight = 100,
+            cellwidth = 50,
+            cellheight = 50,
             cluster_cols= F,
             cluster_rows= F,
             display_numbers = T,
@@ -196,6 +221,13 @@ p<-pheatmap(M,
             annotation_legend = TRUE
 )
 p
+
+
+```
+
+#### Figure 6E: Spearman correlation
+
+```{r, message=FALSE, warning=FALSE}
 
 #####################################################################################
 # Plot features of NAD Pol overlaps                       
@@ -339,3 +371,5 @@ barplot <- tbl %>%
 barplot
 
 utils::sessionInfo()
+
+```

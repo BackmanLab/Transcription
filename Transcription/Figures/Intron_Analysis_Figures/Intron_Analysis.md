@@ -1090,7 +1090,7 @@ utils::sessionInfo()
     ## other attached packages:
     ##  [1] ggrepel_0.9.6        magrittr_2.0.3       plyranges_1.22.0    
     ##  [4] GenomicRanges_1.54.1 GenomeInfoDb_1.38.8  IRanges_2.36.0      
-    ##  [7] S4Vectors_0.40.2     BiocGenerics_0.48.1  data.table_1.16.0   
+    ##  [7] S4Vectors_0.40.2     BiocGenerics_0.48.1  data.table_1.16.2   
     ## [10] ggside_0.3.1         ggpubr_0.6.0         tidyr_1.3.1         
     ## [13] dendsort_0.3.4       viridis_0.6.5        viridisLite_0.4.2   
     ## [16] pheatmap_1.0.12      matrixStats_1.4.1    stringr_1.5.1       
