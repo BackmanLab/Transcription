@@ -1127,8 +1127,6 @@ p + geom_xsidedensity(aes(y=after_stat(density), alpha=0.5, xfill = cond), posit
   scale_yfill_manual(values = c("#D46780","#798234")) + theme(ggside.panel.scale = .2)+
   scale_xsidey_continuous() + scale_ysidex_continuous() 
 
-
-
 #########################################################################################
 # Hg38 gene positions
 #########################################################################################
